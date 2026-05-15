@@ -6,12 +6,12 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/micka33/pi-karpathy-skill.git"
+    "url": "git+https://github.com/Micka33/pi-karpathy-skill.git"
   },
   "bugs": {
-    "url": "https://github.com/micka33/pi-karpathy-skill/issues"
+    "url": "https://github.com/Micka33/pi-karpathy-skill/issues"
   },
-  "homepage": "https://github.com/micka33/pi-karpathy-skill#readme",
+  "homepage": "https://github.com/Micka33/pi-karpathy-skill#readme",
   "publishConfig": {
     "access": "public"
   },
