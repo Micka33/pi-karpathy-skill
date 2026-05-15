@@ -140,9 +140,20 @@ jobs:
             npm publish "./release/$TARBALL" --registry="$REGISTRY" --access public
           fi
 
-          if [[ "${{ steps.version.outputs.prerelease }}" == "false" ]]; then
-            npm dist-tag add "$PACKAGE_NAME@$VERSION" latest --registry="$REGISTRY"
-          fi
+          npm dist-tag add "$PACKAGE_NAME@$VERSION" latest --registry="$REGISTRY"
+
+          for attempt in {1..12}; do
+            if npm view "$PACKAGE_NAME@$VERSION" version --registry="$REGISTRY" && npm view "$PACKAGE_NAME" dist-tags.latest --registry="$REGISTRY"; then
+              break
+            fi
+
+            if [[ "$attempt" == "12" ]]; then
+              echo "GitHub Packages metadata did not become visible after publish" >&2
+              exit 1
+            fi
+
+            sleep 10
+          done
 
       - name: Create GitHub release
         shell: bash
