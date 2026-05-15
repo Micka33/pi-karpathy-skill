@@ -25,9 +25,11 @@
   "files": [
     "README.md",
     "LICENSE",
+    "assets",
     "skills"
   ],
   "pi": {
+    "image": "https://raw.githubusercontent.com/Micka33/pi-karpathy-skill/main/assets/social-preview.png",
     "skills": [
       "./skills"
     ]

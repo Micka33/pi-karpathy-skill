@@ -1,5 +1,9 @@
 # pi-karpathy-skill
 
+<p align="center">
+  <img src="assets/social-preview.png" alt="pi-karpathy-skill visual" width="100%">
+</p>
+
 Pi package that provides the `karpathy-guidelines` skill to coding agents.
 
 The skill contains behavioral guidelines inspired by [Andrej Karpathy's observations](https://x.com/karpathy/status/2015883857489522876) on common LLM coding pitfalls: think before coding, keep solutions simple, make surgical changes, and define verifiable success criteria.
