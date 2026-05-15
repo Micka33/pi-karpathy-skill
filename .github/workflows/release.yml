@@ -49,7 +49,6 @@ jobs:
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
-          scope: "@micka33"
 
       - name: Set package version from tag
         run: npm version --no-git-tag-version --allow-same-version "${{ steps.version.outputs.version }}"
