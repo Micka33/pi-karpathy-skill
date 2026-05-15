@@ -1,0 +1,35 @@
+{
+  "name": "@micka33/pi-karpathy-skill",
+  "version": "0.1.0",
+  "description": "Pi package providing the Karpathy Guidelines skill for safer, simpler coding-agent behavior.",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/micka33/pi-karpathy-skill.git"
+  },
+  "bugs": {
+    "url": "https://github.com/micka33/pi-karpathy-skill/issues"
+  },
+  "homepage": "https://github.com/micka33/pi-karpathy-skill#readme",
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "pi-package",
+    "pi-skill",
+    "agent-skills",
+    "coding-agent",
+    "karpathy"
+  ],
+  "files": [
+    "README.md",
+    "LICENSE",
+    "skills"
+  ],
+  "pi": {
+    "skills": [
+      "./skills"
+    ]
+  }
+}

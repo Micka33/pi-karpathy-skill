@@ -1,0 +1,182 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+  id-token: write
+  packages: write
+
+jobs:
+  release:
+    name: Publish package and create GitHub release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Extract version from tag
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          SEMVER='^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
+
+          if [[ ! "$VERSION" =~ $SEMVER ]]; then
+            echo "Invalid semver tag: $TAG" >&2
+            echo "Expected tags like v1.2.3 or v1.2.3-beta.1" >&2
+            exit 1
+          fi
+
+          PRERELEASE=false
+          if [[ "$VERSION" == *-* ]]; then
+            PRERELEASE=true
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+          scope: "@micka33"
+
+      - name: Set package version from tag
+        run: npm version --no-git-tag-version --allow-same-version "${{ steps.version.outputs.version }}"
+
+      - name: Validate package manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e "const pkg=require('./package.json'); if (pkg.name !== '@micka33/pi-karpathy-skill') throw new Error('Unexpected package name: '+pkg.name);"
+          test -f skills/karpathy-guidelines/SKILL.md
+          npm pack --dry-run
+
+      - name: Pack release artifact
+        id: pack
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          npm pack --pack-destination release
+
+          shopt -s nullglob
+          tarballs=(release/*.tgz)
+          if [[ ${#tarballs[@]} -ne 1 ]]; then
+            echo "Expected exactly one release tarball, found ${#tarballs[@]}" >&2
+            printf ' - %s\n' "${tarballs[@]}" >&2
+            exit 1
+          fi
+
+          TARBALL="$(basename "${tarballs[0]}")"
+          sha256sum "release/$TARBALL" > "release/$TARBALL.sha256"
+          echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
+
+      - name: Publish npm package
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_ACCESS_TOKEN }}
+          TARBALL: ${{ steps.pack.outputs.tarball }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          PACKAGE_NAME="$(node -p "require('./package.json').name")"
+
+          if npm view "$PACKAGE_NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "$PACKAGE_NAME@$VERSION is already published to npm; skipping npm publish."
+          else
+            npm publish "./release/$TARBALL" --access public --provenance
+          fi
+
+          if [[ "${{ steps.version.outputs.prerelease }}" == "false" ]]; then
+            npm dist-tag add "$PACKAGE_NAME@$VERSION" latest
+          fi
+
+          for attempt in {1..12}; do
+            if npm view "$PACKAGE_NAME@$VERSION" version >/dev/null 2>&1; then
+              break
+            fi
+
+            if [[ "$attempt" == "12" ]]; then
+              echo "npm package metadata did not become visible after publish" >&2
+              exit 1
+            fi
+
+            sleep 10
+          done
+
+      - name: Publish GitHub package
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ github.token }}
+          TARBALL: ${{ steps.pack.outputs.tarball }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          PACKAGE_NAME="$(node -p "require('./package.json').name")"
+          REGISTRY="https://npm.pkg.github.com"
+
+          NPMRC="${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"
+          {
+            echo "@micka33:registry=$REGISTRY"
+            echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}"
+          } >> "$NPMRC"
+
+          if npm view "$PACKAGE_NAME@$VERSION" version --registry="$REGISTRY" >/dev/null 2>&1; then
+            echo "$PACKAGE_NAME@$VERSION is already published to GitHub Packages; skipping publish."
+          else
+            npm publish "./release/$TARBALL" --registry="$REGISTRY" --access public
+          fi
+
+          if [[ "${{ steps.version.outputs.prerelease }}" == "false" ]]; then
+            npm dist-tag add "$PACKAGE_NAME@$VERSION" latest --registry="$REGISTRY"
+          fi
+
+      - name: Create GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+          TARBALL: ${{ steps.pack.outputs.tarball }}
+        run: |
+          set -euo pipefail
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "release/$TARBALL" "release/$TARBALL.sha256" --clobber
+          else
+            args=(
+              release create "$TAG"
+              "release/$TARBALL"
+              "release/$TARBALL.sha256"
+              --title "pi-karpathy-skill $VERSION"
+              --generate-notes
+            )
+
+            if [[ "$PRERELEASE" == "true" ]]; then
+              args+=(--prerelease)
+            fi
+
+            gh "${args[@]}"
+          fi
+
+      - name: Update latest git tag
+        if: ${{ steps.version.outputs.prerelease == 'false' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git tag -f latest "$(git rev-parse HEAD)"
+          git push --force origin refs/tags/latest
